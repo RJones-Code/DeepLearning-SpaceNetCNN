@@ -1,10 +1,22 @@
 import rasterio
-import geopandas as gpd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import numpy as np
 from matplotlib.patches import Polygon
 import re
+
+def load_image(path, bands=[1,2,3]):
+    with rasterio.open(path) as src:
+        img = src.read(bands).astype(np.float32)
+
+        for i in range(img.shape[0]):
+            band = img[i]
+            band -= band.min()
+            if band.max() > 0:
+                band /= band.max()
+            img[i] = band
+
+        return img.transpose(1, 2, 0)
 
 def display_images(sat_img, gdf):
     """
@@ -61,6 +73,7 @@ def get_date(file_path):
     date_str : str
         Extracted date in format "YYYY-MM", or "Unknown" if not found.
     """
+
     file_path = Path(file_path)
     filename = file_path.stem 
 
@@ -71,51 +84,3 @@ def get_date(file_path):
         return f"{year}-{month}"
     else:
         return "Unknown"
-
-# ------------------------------
-# Main Driver
-# ------------------------------
-root = Path(r"C:\Users\russj\.cache\kagglehub\datasets\amerii\spacenet-7-multitemporal-urban-development\versions\1")
-train_sample = root / "SN7_buildings_train_sample" / "sample"
-
-# Pick titles
-tile = next(p for p in train_sample.iterdir() if p.is_dir())
-print(f"Tile: {tile.name}")
-
-# ------------------------------
-# Pick image from images_masked
-# ------------------------------
-images_masked_dir = tile / "images_masked"
-image_files = list(images_masked_dir.glob("*.tif"))
-if not image_files:
-    raise ValueError("No images found in images_masked")
-img_path = image_files[0]
-
-# Load satellite image
-def load_image(path, bands=[1,2,3]):
-    with rasterio.open(path) as src:
-        img = src.read(bands).astype(np.float32)
-        for i in range(img.shape[0]):
-            band = img[i]
-            band -= band.min()
-            if band.max() > 0:
-                band /= band.max()
-            img[i] = band
-        img = img.transpose(1,2,0)
-        return img
-
-sat_img = load_image(img_path)
-
-# ------------------------------
-# Get corresponding GeoJSON
-# ------------------------------
-labels_dir = tile / "labels_match_pix"
-geojson_name = img_path.stem + "_Buildings.geojson"
-label_path = labels_dir / geojson_name
-if not label_path.exists():
-    raise ValueError(f"No matching GeoJSON found for {img_path.name}")
-
-gdf = gpd.read_file(label_path)
-
-display_images(sat_img, gdf)
-print(get_date(img_path))

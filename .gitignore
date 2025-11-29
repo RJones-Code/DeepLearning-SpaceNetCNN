@@ -1,0 +1,14 @@
+# Python compiled files
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+env/
+.env
+
+# Main Driver for Testing
+test.py
+
+# UNet weights
+unet_buildings.pth
