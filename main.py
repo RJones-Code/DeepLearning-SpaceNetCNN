@@ -67,5 +67,7 @@ if __name__ == "__main__":
         epochs=10,
         batch_size=4,
         lr=1e-4,
-        device=device
+        device=device,
+        pos_weight=5,
+        patience=5
     )

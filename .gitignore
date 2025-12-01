@@ -11,7 +11,7 @@ env/
 test.py
 
 # UNet weights
-unet_buildings.pth
+unet_best.pth
 
 archive/
 archive.zip

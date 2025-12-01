@@ -1,6 +1,7 @@
 from torch.utils.data import DataLoader, random_split
 import torch.optim as optim
 import numpy as np
+import torch.nn as nn
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
@@ -28,6 +29,14 @@ def compute_dice(preds, masks, threshold=0.5, eps=1e-6):
     )
     return dice.mean().item()
 
+# --------- Loss Function --------- #
+def iou_loss(preds, masks, eps=1e-6):
+    preds = torch.sigmoid(preds)  # convert logits to probabilities
+    intersection = (preds * masks).sum(dim=[1,2,3])
+    union = preds.sum(dim=[1,2,3]) + masks.sum(dim=[1,2,3]) - intersection
+    iou = (intersection + eps) / (union + eps)
+    return 1 - iou.mean()  # 1 - IoU so lower loss = better
+
 # -------------- Visualization ------------- #
 
 def visualize_predictions(img_np, mask_true, mask_pred):
@@ -37,6 +46,9 @@ def visualize_predictions(img_np, mask_true, mask_pred):
     mask_pred: predicted mask (H,W) binary
     """
     # Compute error map
+    if img_np.shape[2] > 3:
+        img_np = img_np[:, :, :3]
+
     tp = (mask_true == 1) & (mask_pred == 1)  # correctly predicted
     fn = (mask_true == 1) & (mask_pred == 0)  # missed
     fp = (mask_true == 0) & (mask_pred == 1)  # extra
@@ -58,12 +70,12 @@ def visualize_predictions(img_np, mask_true, mask_pred):
     plt.axis('off')
 
     plt.show(block=False)
-    plt.pause(10)
+    plt.pause(30)
     plt.close()
 
 # ---------------- Training ---------------- #
 
-def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4, device='cuda', patience=5):
+def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4, device='cuda', pos_weight=5, patience=5):
 
     # Load dataset for training
     train_size = int(0.8 * len(dataset))
@@ -75,6 +87,8 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4, device='cuda',
 
     optimizer = optim.Adam(model.parameters(), lr=lr)
     model.to(device)
+
+    criterion_bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(device))
 
     best_val_iou = 0
     epochs_no_improve = 0
@@ -98,7 +112,9 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4, device='cuda',
             optimizer.zero_grad()
 
             preds = model(imgs)                # → raw logits
-            loss = F.binary_cross_entropy_with_logits(preds, masks)
+
+            # Loss
+            loss = criterion_bce(preds, masks) + iou_loss(preds, masks)
             loss.backward()
             optimizer.step()
 
