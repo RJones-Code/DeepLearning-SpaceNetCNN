@@ -3,10 +3,10 @@ import re
 import json
 import torch
 from torch.utils.data import Dataset
-from PIL import Image
 import rasterio
-from torchvision import transforms
-
+import numpy as np
+from rasterio.features import rasterize
+from shapely.geometry import shape
 
 # Regex to extract timestamp from filenames
 TIMESTAMP_RE = re.compile(r"global_monthly_(\d{4}_\d{2})_mosaic")
@@ -99,27 +99,87 @@ class SpaceNet7Buildings(Dataset):
         pix_path   = find_file(pix_dir,  prefix)
 
         # Load images
-        image = self._load_image(img_path) if img_path else None
-        masked = self._load_image(mask_path) if mask_path else None
+        with rasterio.open(img_path) as src:
+            image = src.read().astype("float32") / 255.0
+            height, width = image.shape[1], image.shape[2]
 
-        if self.transform and image is not None:
-            image = self.transform(image)
-        if self.transform and masked is not None:
-            masked = self.transform(masked)
+        image = torch.from_numpy(image)  # (C,H,W)
 
-        # Load annotations
-        labels = self._load_geojson(lbl_path)
-        labels_match = self._load_geojson(lblm_path)
-        labels_match_pix = self._load_geojson(pix_path)
+        # Load masked image if it exists
+        masked_image = None
+        if mask_path:
+            with rasterio.open(mask_path) as src:
+                masked = src.read().astype("float32") / 255.0
+            masked_image = torch.from_numpy(masked)
+
+        # Load geojsons
+        def load_geojson(path):
+            if not path:
+                return None
+            try:
+                with open(path, "r") as f:
+                    return json.load(f)
+            except:
+                return None
+
+        labels           = load_geojson(lbl_path)
+        labels_match     = load_geojson(lblm_path)
+        labels_match_pix = load_geojson(pix_path)
+
+        # Build pixel space mask
+        polygons = []
+        if labels_match_pix is not None:
+            for feat in labels_match_pix["features"]:
+                polygons.append(shape(feat["geometry"]))
+
+        if len(polygons) > 0:
+            mask = rasterize(
+                [(geom, 1) for geom in polygons],
+                out_shape=(height, width),
+                fill=0,
+                dtype="uint8"
+            )
+        else:
+            mask = np.zeros((height, width), dtype="uint8")
+
+        mask = torch.from_numpy(mask).unsqueeze(0)  # (1,H,W)
+
+        # Apply transforms (only to image + mask)
+        if self.transform:
+            img_t  = image.permute(1,2,0)     # CHW → HWC
+            mask_t = mask.permute(1,2,0)      # 1HW → HW1
+
+            combined = self.transform({"image": img_t, "mask": mask_t})
+            image = combined["image"].permute(2,0,1)
+            mask  = combined["mask"].permute(2,0,1)
 
         return {
-            "timestamp": timestamp,
-            "image": image,
-            "image_masked": masked,
+        "timestamp": timestamp,
+
+        # Training fields
+        "image": image,           # (C,H,W)
+        "mask": mask,             # (1,H,W)
+
+        "polygons_pix": polygons,  # list of shapely polygons
+
+        # Extra data for validation/visualization
+        "extra": {
+            "image_masked": masked_image,
             "labels": labels,
             "labels_match": labels_match,
-            "labels_match_pix": labels_match_pix
+            "labels_match_pix": labels_match_pix,
+            "paths": {
+                "image": img_path,
+                "masked": mask_path,
+                "labels": lbl_path,
+                "labels_match": lblm_path,
+                "labels_match_pix": pix_path
+            },
+            "tile": os.path.basename(tile_path),
+            "height": height,
+            "width": width
         }
+    }
 
     def __getitem__(self, idx):
         tile_path, timestamps = self.index[idx]

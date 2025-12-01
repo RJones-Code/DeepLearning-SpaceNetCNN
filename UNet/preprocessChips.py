@@ -1,92 +1,87 @@
-import torch
-from torch.utils.data import Dataset
-from pathlib import Path
 import numpy as np
-from PIL import Image
-import geopandas as gpd
 from shapely.geometry import box
 from shapely.affinity import translate
 from rasterio.features import rasterize
+import torch
+from torch.utils.data import Dataset
 
-class BuildingChipsDataset(Dataset):
-    def __init__(self, root, chip_size=256, min_area=10, bands=[1,2,3]):
-        self.root = Path(root)
-        self.chip_size = chip_size
-        self.min_area = min_area
-        self.bands = bands
-        self.samples = []
-
-        # Iterate over tiles
-        for tile in self.root.iterdir():
-            if not tile.is_dir():
-                continue
-            images_dir = tile / "images_masked"
-            labels_dir = tile / "labels_match_pix"
-            for img_path in images_dir.glob("*.tif"):
-                label_path = labels_dir / f"{img_path.stem}_Buildings.geojson"
-                if label_path.exists():
-                    self.samples.append((img_path, label_path))
+class ChipsDataset(Dataset):
+    def __init__(self, chips):
+        self.chips = chips
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.chips)
 
     def __getitem__(self, idx):
-        img_path, label_path = self.samples[idx]
+        img, mask, timestamp = self.chips[idx]
 
-        # Load image
-        img = np.array(Image.open(img_path).convert("RGB")) / 255.0  # normalize
+        return {
+            "image": torch.tensor(img).permute(2,0,1).float(),
+            "mask": torch.tensor(mask).unsqueeze(0).float(),
+            "timestamp": timestamp
+        }
+    
 
-        # Load building polygons
-        gdf = gpd.read_file(label_path)
+def generate_chips_from_frame(frame, chip_size=256):
+    """
+    Input:
+      frame = {
+         "image": torch(C,H,W),
+         "polygons_pix": [shapely polygon list]
+      }
+    Returns:
+      list of (chip_img, chip_mask, timestamp)
+    """
 
-        gdf = gdf.set_crs(None, allow_override=True)
-        gdf = gdf[gdf.area >= self.min_area]
+    img = frame["image"].permute(1,2,0).cpu().numpy()  # HWC
+    H, W, _ = img.shape
 
-        chips = self.generate_chips(img, gdf)
+    polygons = frame.get("polygons_pix", [])
 
-        # pick a random chip with at least one building
-        chips_with_buildings = [c for c in chips if c[1].sum() > 0]
-        if not chips_with_buildings:
-            # fallback if no building in any chip
-            chip_img, chip_mask, _ = chips[np.random.randint(len(chips))]
-        else:
-            chip_img, chip_mask, _ = chips_with_buildings[np.random.randint(len(chips_with_buildings))]
+    chips = []
 
-        # Convert to tensor
-        chip_img = torch.from_numpy(chip_img.transpose(2,0,1)).float()  # (C,H,W)
-        chip_mask = torch.from_numpy(chip_mask).unsqueeze(0).float()      # (1,H,W)
+    for y0 in range(0, H, chip_size):
+        for x0 in range(0, W, chip_size):
+            x1 = x0 + chip_size
+            y1 = y0 + chip_size
+            if x1 > W or y1 > H:
+                continue
 
-        return chip_img, chip_mask
+            chip_box = box(x0, y0, x1, y1)
 
-    def generate_chips(self, img, gdf):
-        H, W, _ = img.shape
-        chips = []
+            # polygons inside the chip
+            polys_in = [g for g in polygons if g.intersects(chip_box)]
 
-        for y0 in range(0, H, self.chip_size):
-            for x0 in range(0, W, self.chip_size):
-                x1 = min(x0 + self.chip_size, W)
-                y1 = min(y0 + self.chip_size, H)
+            # build mask
+            if not polys_in:
+                chip_mask = np.zeros((chip_size, chip_size), dtype=np.uint8)
+            else:
+                shifted = [
+                    translate(g.intersection(chip_box), -x0, -y0)
+                    for g in polys_in
+                ]
+                chip_mask = rasterize(
+                    [(s, 1) for s in shifted],
+                    out_shape=(chip_size, chip_size),
+                    fill=0,
+                    dtype=np.uint8
+                )
 
-                chip_img = img[y0:y1, x0:x1]
-                if chip_img.shape[0] != self.chip_size or chip_img.shape[1] != self.chip_size:
-                    continue
+            chip_img = img[y0:y1, x0:x1]
+            chips.append((chip_img, chip_mask, frame["timestamp"]))
 
-                chip_box = box(x0, y0, x1, y1)
-                gdf_chip = gdf[gdf.intersects(chip_box)].copy()
+    return chips
 
-                if gdf_chip.empty:
-                    chip_mask = np.zeros((self.chip_size, self.chip_size), dtype=np.uint8)
-                    gdf_shifted = gpd.GeoDataFrame(geometry=[])
-                else:
-                    shifted_geoms = [translate(geom.intersection(chip_box), xoff=-x0, yoff=-y0) for geom in gdf_chip.geometry]
-                    gdf_shifted = gpd.GeoDataFrame(geometry=shifted_geoms, crs=None)
+def create_all_chips(sn7_dataset, chip_size=256):
+    """
+    sn7_dataset: instance of SpaceNet7Buildings
+    returns: list of (chip_img, chip_mask)
+    """
 
-                    chip_mask = rasterize(
-                        [(geom, 1) for geom in shifted_geoms],
-                        out_shape=(self.chip_size, self.chip_size),
-                        fill=0,
-                        dtype=np.uint8
-                    )
-
-                chips.append((chip_img, chip_mask, gdf_shifted))
-        return chips
+    all_chips = []
+    for item in sn7_dataset:
+        frames = item.get("frames", [item])
+        for f in frames:
+            chips = generate_chips_from_frame(f, chip_size)
+            all_chips.extend(chips)
+    return all_chips
