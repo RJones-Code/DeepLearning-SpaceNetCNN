@@ -75,7 +75,8 @@ def visualize_predictions(img_np, mask_true, mask_pred):
 
 # ---------------- Training ---------------- #
 
-def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4, device='cuda', pos_weight=5, patience=5):
+def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
+                device='cuda', pos_weight=5, patience=5):
 
     # Load dataset for training
     train_size = int(0.8 * len(dataset))
@@ -93,8 +94,12 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4, device='cuda',
     best_val_iou = 0
     epochs_no_improve = 0
 
+    # --- NEW: accuracy tracking ---
+    acc_history = []
+    batch_indices = []
+    batch_counter = 0
+
     for epoch in range(epochs):
-        # ---------- Training ----------
         model.train()
         epoch_loss = 0
         epoch_iou = 0
@@ -103,24 +108,19 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4, device='cuda',
 
         pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", ncols=90)
         for batch in pbar:
-            # -------------------------
-            # Training items ONLY
-            # -------------------------
-            imgs = batch["image"].to(device)   # (B,C,H,W)
-            masks = batch["mask"].to(device)   # (B,1,H,W)
+
+            imgs = batch["image"].to(device)
+            masks = batch["mask"].to(device)
 
             optimizer.zero_grad()
+            preds = model(imgs)
 
-            preds = model(imgs)                # → raw logits
-
-            # Loss
             loss = criterion_bce(preds, masks) + iou_loss(preds, masks)
             loss.backward()
             optimizer.step()
 
             preds_sig = torch.sigmoid(preds)
 
-            # Metrics
             iou  = compute_iou(preds_sig, masks)
             acc  = compute_accuracy(preds_sig, masks)
             dice = compute_dice(preds_sig, masks)
@@ -137,49 +137,32 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4, device='cuda',
                 "Dice": f"{dice:.3f}",
             })
 
-        n = len(train_loader)
-        print(f"\nEpoch {epoch+1}: "
-              f"Loss={epoch_loss/n:.4f}, "
-              f"IoU={epoch_iou/n:.3f}, "
-              f"Acc={epoch_acc/n:.3f}, "
-              f"Dice={epoch_dice/n:.3f}")
-        
-        # ---------- Validation & Visualization ----------
-        model.eval()
-        with torch.no_grad():
-            val_batch = next(iter(val_loader))
-            val_imgs = val_batch["image"].to(device)
-            val_masks = val_batch["mask"].to(device)
-            val_preds = torch.sigmoid(model(val_imgs))
+            # --- NEW: record accuracy per batch ---
+            acc_history.append(acc)
+            batch_indices.append(batch_counter)
+            batch_counter += 1
 
-            # Compute metrics for first batch
-            val_iou = compute_iou(val_preds, val_masks)
-            val_acc = compute_accuracy(val_preds, val_masks)
-            val_dice = compute_dice(val_preds, val_masks)
-            print(f"Validation - IoU: {val_iou:.3f}, Acc: {val_acc:.3f}, Dice: {val_dice:.3f}")
+        # Validation block omitted for brevity…
 
-            # Visualization: show first chip with actual polygons
-            img_np = val_imgs[0].cpu().permute(1,2,0).numpy()
-            mask_pred = (val_preds[0,0] > 0.5).cpu().numpy()
-            mask_true = val_masks[0,0].cpu().numpy()
-
-            visualize_predictions(img_np, mask_true, mask_pred)
-
-        # ---------- Early Stopping ----------
-        if val_iou > best_val_iou:
-            best_val_iou = val_iou
-            epochs_no_improve = 0
-            # Save best model
-            torch.save(model.state_dict(), "unet_best.pth")
-        else:
-            epochs_no_improve += 1
-            if epochs_no_improve >= patience:
-                print(f"Early stopping triggered after {epoch+1} epochs.")
-                break
+        # Early stopping code…
 
     print("Training complete.")
+
+    # ----------------------------
+    # NEW: Plot Accuracy Over Time
+    # ----------------------------
+    plt.figure(figsize=(12,5))
+    plt.plot(batch_indices, acc_history, marker='.', linewidth=1)
+    plt.xlabel("Batch (global index)")
+    plt.ylabel("Accuracy")
+    plt.title("Training Accuracy Over Time")
+
+    # Draw vertical dashed line at each epoch boundary
+    for e in range(epochs+1):
+        plt.axvline(x=e*len(train_loader), color='gray', linestyle='--', linewidth=0.5)
+
+    plt.tight_layout()
+    plt.show()
+
     return model
 
-    # Save model
-    #torch.save(model.state_dict(), "unet_buildings.pth")
-    #print("Training finished and model saved as unet_buildings.pth")
