@@ -77,10 +77,23 @@ def visualize_predictions(img_np, mask_true, mask_pred):
 
 def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
                 device='cuda', pos_weight=5, patience=5):
+    
+    plt.ion()  # interactive mode
 
-    import matplotlib.pyplot as plt
+    # Create live plot figure
+    fig, ax = plt.subplots(figsize=(12,5))
+    line, = ax.plot([], [], marker='.', linewidth=1)
+    ax.set_xlabel("Batch (global index)")
+    ax.set_ylabel("Accuracy")
+    ax.set_title("Training Accuracy Over Time (Live)")
+    plt.tight_layout()
 
-    # Load dataset for training
+    # Accuracy storage
+    acc_history = []
+    batch_indices = []
+    batch_counter = 0
+
+    # Load dataset
     train_size = int(0.8 * len(dataset))
     val_size   = len(dataset) - train_size
     train_ds, val_ds = random_split(dataset, [train_size, val_size])
@@ -96,13 +109,9 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
     best_val_iou = 0
     epochs_no_improve = 0
 
-    # --- NEW: track accuracy at each batch ---
-    acc_history = []
-    batch_indices = []
-    batch_counter = 0
-
     for epoch in range(epochs):
-        # ---------- Training ----------
+
+        # ------------------ TRAINING ------------------
         model.train()
         epoch_loss = 0
         epoch_iou  = 0
@@ -140,10 +149,21 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
                 "Dice": f"{dice:.3f}",
             })
 
-            # ------ NEW: record accuracy per batch ------
+            # ------------------ LIVE PLOT UPDATE ------------------
             acc_history.append(acc)
             batch_indices.append(batch_counter)
+
+            line.set_xdata(batch_indices)
+            line.set_ydata(acc_history)
+
+            ax.relim()
+            ax.autoscale_view()
+
+            plt.draw()
+            plt.pause(0.001)
+
             batch_counter += 1
+            # -------------------------------------------------------
 
         n = len(train_loader)
         print(f"\nEpoch {epoch+1}: "
@@ -152,7 +172,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
               f"Acc={epoch_acc/n:.3f}, "
               f"Dice={epoch_dice/n:.3f}")
 
-        # ---------- Validation & Visualization ----------
+        # ------------------ VALIDATION ------------------
         model.eval()
         with torch.no_grad():
             val_batch = next(iter(val_loader))
@@ -163,14 +183,15 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
             val_iou  = compute_iou(val_preds, val_masks)
             val_acc  = compute_accuracy(val_preds, val_masks)
             val_dice = compute_dice(val_preds, val_masks)
+
             print(f"Validation - IoU: {val_iou:.3f}, Acc: {val_acc:.3f}, Dice: {val_dice:.3f}")
 
-            img_np = val_imgs[0].cpu().permute(1, 2, 0).numpy()
+            img_np = val_imgs[0].cpu().permute(1,2,0).numpy()
             mask_pred = (val_preds[0,0] > 0.5).cpu().numpy()
             mask_true = val_masks[0,0].cpu().numpy()
             visualize_predictions(img_np, mask_true, mask_pred)
 
-        # ---------- Early Stopping ----------
+        # ------------------ EARLY STOPPING ------------------
         if val_iou > best_val_iou:
             best_val_iou = val_iou
             epochs_no_improve = 0
@@ -183,20 +204,8 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
 
     print("Training complete.")
 
-    # ----------------------------
-    # NEW: Plot Accuracy Over Time
-    # ----------------------------
-    plt.figure(figsize=(12,5))
-    plt.plot(batch_indices, acc_history, marker='.', linewidth=1)
-    plt.xlabel("Batch (global index)")
-    plt.ylabel("Accuracy")
-    plt.title("Training Accuracy Over Time")
-
-    # draw epoch boundaries
-    for e in range(epoch + 1):  # +1 in case early stopping ended early
-        plt.axvline(x=e * len(train_loader), color='gray', linestyle='--', linewidth=0.6)
-
-    plt.tight_layout()
+    # Keep figure open after training
+    plt.ioff()
     plt.show()
 
     return model
