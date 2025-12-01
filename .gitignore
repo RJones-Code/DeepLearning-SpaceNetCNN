@@ -1,2 +1,17 @@
-archive
+# Python compiled files
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+env/
+.env
+
+# Main Driver for Testing
+test.py
+
+# UNet weights
+unet_best.pth
+
+archive/
 archive.zip
