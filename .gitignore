@@ -12,3 +12,6 @@ test.py
 
 # UNet weights
 unet_buildings.pth
+
+archive/
+archive.zip

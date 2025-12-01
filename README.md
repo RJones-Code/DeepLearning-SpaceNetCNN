@@ -6,7 +6,7 @@
 - TODO:
   - Test other people's models
   - Our Code:
-    - Load from training data:
+    - PlatinumFrog: Load from training data:
       - Satelite images
       - building geometry
       - Building information
