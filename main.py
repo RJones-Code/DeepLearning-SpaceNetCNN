@@ -64,7 +64,7 @@ if __name__ == "__main__":
     train_model(
         dataset=chips_dataset,
         model=UNet_Model,
-        epochs=10,
+        epochs=5,
         batch_size=4,
         lr=1e-4,
         device=device,
