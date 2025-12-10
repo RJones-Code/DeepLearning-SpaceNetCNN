@@ -111,7 +111,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
     neg_weight = torch.tensor(neg_weight).to(device)
 
     # Load dataset for training
-    train_size = int(0.8 * len(dataset))
+    train_size = int(0.85 * len(dataset))
     val_size   = len(dataset) - train_size
     train_ds, val_ds = random_split(dataset, [train_size, val_size])
 
@@ -120,7 +120,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
 
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='max', factor=0.5, patience=5, verbose=True
+        optimizer, mode='max', factor=0.5, patience=5
     )
 
     model.to(device)

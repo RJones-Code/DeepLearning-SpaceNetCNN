@@ -24,3 +24,6 @@ plots/
 
 # Data
 spacenet_data/
+
+# Plots
+verification_plots/
