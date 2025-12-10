@@ -141,8 +141,10 @@ Russell Jones (RJones-Code):
 - UNet Model
 - Metric Functions
 - Learning Rate Scheduling
+- Training
 
 Theodore Boswell (PlatinumFrog):
 - Data Loader
 - Chips
+- Evaluation
 - Visualize Graphs
