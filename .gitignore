@@ -15,3 +15,15 @@ unet_best.pth
 
 archive/
 archive.zip
+
+# evaluation graphs
+evaluation_outputs/
+
+# training plots
+plots/
+
+# Data
+spacenet_data/
+
+# Plots
+verification_plots/
