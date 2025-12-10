@@ -1,0 +1,26 @@
+# Core
+python>=3.10
+
+# PyTorch ecosystem
+torch==2.2.0
+torchvision==0.17.1  # only if used for transforms/models
+torchaudio==2.2.0    # optional, only if needed
+
+# Data handling
+numpy==1.26.0
+pandas==2.1.1
+
+# Geospatial / raster
+rasterio==1.4.0
+shapely==2.2.1
+
+# Visualization
+matplotlib==3.8.0
+seaborn==0.12.2
+tqdm==4.66.0
+
+# Environment variables
+python-dotenv==1.1.1
+
+# Kaggle integration
+kaggle==1.6.0  # for dataset download

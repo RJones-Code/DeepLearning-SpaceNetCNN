@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
 
-# ---------------- Metrics  ---------------- #
+# Metrics 
 
 def compute_iou(preds, masks, threshold=0.5, eps=1e-6):
     preds_bin = (preds > threshold).float()
@@ -28,10 +28,9 @@ def compute_pred_only_accuracy(preds, masks, threshold=0.5, eps=1e-6):
     Ignores pixels predicted as 0.
     """
     preds_bin = (preds > threshold).float()
-    # Only consider pixels predicted as 1
     mask_pred_1 = preds_bin == 1
     if mask_pred_1.sum() == 0:
-        return 0.0  # avoid division by zero if no positives predicted
+        return 0.0 
     correct = (preds_bin[mask_pred_1] == masks[mask_pred_1]).float().mean()
     return correct.item()
 
@@ -43,7 +42,7 @@ def compute_dice(preds, masks, threshold=0.5, eps=1e-6):
     )
     return dice.mean().item()
 
-# --------- Combined Weighted Loss --------- #
+# Combined Weighted Loss
 def weighted_bce_dice_loss(preds, masks, pos_weight=5, neg_weight=1, eps=1e-6):
     """
     preds: logits (B,1,H,W)
@@ -66,7 +65,7 @@ def weighted_bce_dice_loss(preds, masks, pos_weight=5, neg_weight=1, eps=1e-6):
 
     return bce_loss + dice_loss
 
-# -------------- Visualization ------------- #
+# Visualization 
 
 def visualize_predictions(img_np, mask_true, mask_pred):
     """
@@ -78,18 +77,16 @@ def visualize_predictions(img_np, mask_true, mask_pred):
     if img_np.shape[2] > 3:
         img_np = img_np[:, :, :3]
 
-    tp = (mask_true == 1) & (mask_pred == 1)  # correctly predicted
-    fn = (mask_true == 1) & (mask_pred == 0)  # missed
-    fp = (mask_true == 0) & (mask_pred == 1)  # extra
+    tp = (mask_true == 1) & (mask_pred == 1)  
+    fn = (mask_true == 1) & (mask_pred == 0)  
+    fp = (mask_true == 0) & (mask_pred == 1)  
 
-    # Create RGB overlay
     overlay = np.zeros((*mask_true.shape, 3), dtype=np.float32)
 
-    overlay[..., 0] = fn  # Red = missed pixels
-    overlay[..., 1] = tp  # Green = correct pixels
-    overlay[..., 2] = fp  # Blue = extra pixels
+    overlay[..., 0] = fn  
+    overlay[..., 1] = tp  
+    overlay[..., 2] = fp 
 
-    # Blend with original image
     img_float = img_np.astype(np.float32) / 255.0 if img_np.max() > 1 else img_np
     blended = 0.5 * img_float + 0.5 * overlay
 
@@ -102,7 +99,7 @@ def visualize_predictions(img_np, mask_true, mask_pred):
     plt.pause(30)
     plt.close()
 
-# ---------------- Training ---------------- #
+# Training 
 
 def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
                 device='cuda', pos_weight=5, neg_weight=1, patience=5):
@@ -110,7 +107,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
     pos_weight = torch.tensor(pos_weight).to(device)
     neg_weight = torch.tensor(neg_weight).to(device)
 
-    # Load dataset for training
+    # Load dataset 
     train_size = int(0.85 * len(dataset))
     val_size   = len(dataset) - train_size
     train_ds, val_ds = random_split(dataset, [train_size, val_size])
@@ -128,7 +125,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
     best_val_iou = 0
     epochs_no_improve = 0
 
-    # --- Track accuracy at each batch ---
+    # Track accuracy at each batch
     acc_history = []
     loss_history = []
     batch_indices = []
@@ -176,7 +173,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
                 "Dice": f"{dice:.3f}",
             })
 
-            # ------ NEW: record accuracy per batch ------
+            # record accuracy per batch
             acc_history.append(acc)
             loss_history.append(loss.item())
             batch_indices.append(batch_counter)
@@ -190,7 +187,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
               f"PredAcc={epoch_pred_acc/n:.3f}, "
               f"Dice={epoch_dice/n:.3f}")
 
-        # ---------- Validation & Visualization ----------
+        # Validation & Visualization 
         model.eval()
         val_iou, val_acc, val_dice, val_pred_acc = 0, 0, 0, 0
         n_val_batches = 0
@@ -220,7 +217,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
         
         scheduler.step(val_iou)
 
-        # ---------- Early Stopping ----------
+        # Early Stopping
         if val_iou > best_val_iou:
             best_val_iou = val_iou
             epochs_no_improve = 0
@@ -233,9 +230,7 @@ def train_model(dataset, model, epochs=20, batch_size=4, lr=1e-4,
 
     print("Training complete.")
 
-    # ----------------------------
     # Plot Accuracy and Loss Over Time
-    # ----------------------------
 
     # Save plots
     os.makedirs("plots", exist_ok=True)

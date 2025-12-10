@@ -6,9 +6,8 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import os
 
-# Ensure seaborn doesn’t try to render interactively
-plt.switch_backend("Agg")
 
+plt.switch_backend("Agg")
 
 def evaluate_model(model, dataset, device="cpu", save_dir="evaluation_outputs"):
     """
@@ -49,9 +48,7 @@ def evaluate_model(model, dataset, device="cpu", save_dir="evaluation_outputs"):
 
     print(f"[Eval] Collected {len(all_preds)} pixel predictions.")
 
-    # ---------------------------------------------------
     # 1. HISTOGRAM OF PREDICTED PROBABILITIES
-    # ---------------------------------------------------
     plt.figure(figsize=(8,5))
     plt.hist(all_probs, bins=30, alpha=0.75)
     plt.title("Histogram of Predictions (Flattened)")
@@ -61,9 +58,7 @@ def evaluate_model(model, dataset, device="cpu", save_dir="evaluation_outputs"):
     plt.savefig(os.path.join(save_dir, "histogram_predictions.png"))
     plt.close()
 
-    # ---------------------------------------------------
     # 2. CONFUSION MATRIX
-    # ---------------------------------------------------
     cm = confusion_matrix(all_labels, all_preds)
     plt.figure(figsize=(6,5))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
@@ -76,9 +71,7 @@ def evaluate_model(model, dataset, device="cpu", save_dir="evaluation_outputs"):
 
     print("[Eval] Saved confusion matrix & histogram.")
 
-    # ---------------------------------------------------
     # 3. SAVE EXAMPLE PREDICTIONS
-    # ---------------------------------------------------
     print("[Eval] Saving example predictions...")
 
     loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True)
@@ -100,15 +93,14 @@ def evaluate_model(model, dataset, device="cpu", save_dir="evaluation_outputs"):
         if img_np.shape[-1] > 3:
             img_np = img_np[:, :, :3]
 
-        # Create overlay
         tp = (mask_np == 1) & (pred == 1)
         fn = (mask_np == 1) & (pred == 0)
         fp = (mask_np == 0) & (pred == 1)
 
         overlay = np.zeros((*mask_np.shape, 3), dtype=np.float32)
-        overlay[..., 0] = fn  # Red = missed
-        overlay[..., 1] = tp  # Green = correct
-        overlay[..., 2] = fp  # Blue = false positive
+        overlay[..., 0] = fn 
+        overlay[..., 1] = tp  
+        overlay[..., 2] = fp 
 
         img_float = img_np.astype(np.float32) / 255.0 if img_np.max() > 1 else img_np
         blended = 0.5 * img_float + 0.5 * overlay

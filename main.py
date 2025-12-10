@@ -18,9 +18,7 @@ def save_verification_plots(sn7_dataset, chips_dataset, save_dir="verification_p
     """
     os.makedirs(save_dir, exist_ok=True)
 
-    # --------------------------------------------------
     # 1. FULL TILE + POLYGON OVERLAY
-    # --------------------------------------------------
     sample_tile = sn7_dataset[0]              # pick first tile
     frames = sample_tile.get("frames", [sample_tile])
     sample_frame = frames[0]
@@ -41,9 +39,7 @@ def save_verification_plots(sn7_dataset, chips_dataset, save_dir="verification_p
     plt.savefig(os.path.join(save_dir, "tile_polygons.png"))
     plt.close()
 
-    # --------------------------------------------------
     # 2. FIRST CHIP + MASK OVERLAY
-    # --------------------------------------------------
     chip = chips_dataset[0]
     chip_img = chip["image"].permute(1, 2, 0).numpy()
     chip_mask = chip["mask"][0].numpy()
@@ -102,8 +98,5 @@ if __name__ == "__main__":
         neg_weight=2,
         patience=10
     )
-
-    #UNet_Model.load_state_dict(torch.load("unet_best.pth", map_location="cuda"))
-    #UNet_Model.eval()
 
     evaluate_model(UNet_Model, eval_ds, device=device)
