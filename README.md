@@ -12,10 +12,10 @@ This project implements a U-Net model for building footprint segmentation on the
 - [Dependencies](#dependencies)
 - [Dataset](#dataset)
 - [Configuration](#configuration)
-- [Running the Code](#running-the-code)
 - [Training the Model](#training-the-model)
 - [Evaluation](#evaluation)
 - [Notes](#notes)
+- [Contributions](#contributions)
 
 ---
 
@@ -89,7 +89,7 @@ Main will:
 - Save verification plots in verification_plots/
 - Evaluate the model on a validation set
 
-# Training the Model
+## Training the Model
 You can customize training parameters such as:
 - epochs
 - batch_size
@@ -112,7 +112,7 @@ trained_model = train_model(
 )
 ```
 
-# Evaluation
+## Evaluation
 Use evaluate_model to compute metrics on a validation/test set:
 ```bash
 from UNet.evaluate import evaluate_model
@@ -125,16 +125,23 @@ Metrics computed:
 - Accuracy 
 
 ### Notes
+
+---
+
 - Generated chips are currently saved in memory. You can use preprocess_chips to save chips to a folder and load later to speed up training.
 - Best model weights are saved as unet_best.pth automatically during training.
 - Visualization outputs are saved under verification_plots/.
 - Make sure your .env file points to the correct dataset root folder.
 
 ### Contributions
+
+---
+
 Russell Jones (RJones-Code): 
 - UNet Model
 - Metric Functions
 - Learning Rate Scheduling
+
 Theodore Boswell (PlatinumFrog):
 - Data Loader
 - Chips

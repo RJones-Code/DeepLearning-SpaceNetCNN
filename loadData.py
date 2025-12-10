@@ -11,7 +11,6 @@ from shapely.geometry import shape
 # Regex to extract timestamp from filenames
 TIMESTAMP_RE = re.compile(r"global_monthly_(\d{4}_\d{2})_mosaic")
 
-
 class SpaceNet7Buildings(Dataset):
     def __init__(self, root, transform=None, return_series=False):
         """
@@ -24,7 +23,7 @@ class SpaceNet7Buildings(Dataset):
         self.transform = transform
         self.return_series = return_series
         
-        # Each subfolder is a tile (e.g., L15-....)
+        # Each subfolder is a tile
         self.tiles = sorted([
             os.path.join(root, d) for d in os.listdir(root)
             if os.path.isdir(os.path.join(root, d))
@@ -36,7 +35,7 @@ class SpaceNet7Buildings(Dataset):
             timestamps = self._collect_timestamps(tile_path)
 
             if return_series:
-                # One dataset item = one tile (all timestamps)
+                # One dataset item = one tile 
                 self.index.append((tile_path, timestamps))
             else:
                 # One item per timestamp
@@ -59,7 +58,7 @@ class SpaceNet7Buildings(Dataset):
         return len(self.index)
 
     def _load_image(self, path):
-        # SpaceNet-7 images are georeferenced TIFFs → rasterio handles them best
+        # SpaceNet-7 images are georeferenced TIFFs
         with rasterio.open(path) as src:
             img = src.read()       # shape: (C, H, W)
             img = torch.from_numpy(img).float() / 255.0
@@ -75,7 +74,7 @@ class SpaceNet7Buildings(Dataset):
     def _load_frame(self, tile_path, timestamp):
         t = timestamp  # e.g., '2018_03'
         
-        # Build wildcard match prefix
+        # Build match prefix
         prefix = f"global_monthly_{t}_mosaic"
 
         # Paths
